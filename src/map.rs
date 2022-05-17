@@ -124,6 +124,50 @@ impl Map {
     }
 }
 
+// 0 - ocean
+// 1 - river
+// 2 - beach
+// 3 - grassland
+// 4 - forest
+// 5 - mountain
+// 6 - desert
+// 7 - tundra
+// 8 - snow
+// 9 - swamp
+const adj_matrix: [[f32; 10]; 10] = [
+    [70.0, 10.0, 20.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [10.0, 100.0, 5.0, 75.0, 50.0, 30.0, 5.0, 5.0, 5.0, 20.0],
+    [100.0, 5.0, 150.0, 70.0, 20.0, 50.0, 70.0, 1.0, 1.0, 1.0],
+    [1.0, 30.0, 10.0, 100.0, 80.0, 20.0, 5.0, 15.0, 1.0, 30.0],
+    [1.0, 40.0, 1.0, 50.0, 100.0, 20.0, 1.0, 20.0, 1.0, 20.0],
+    [1.0, 40.0, 1.0, 20.0, 30.0, 100.0, 10.0, 30.0, 50.0, 1.0],
+    [1.0, 10.0, 0.0, 20.0, 0.0, 0.0, 100.0, 0.0, 0.0, 0.0],
+    [0.0, 5.0, 0.0, 15.0, 30.0, 30.0, 0.0, 100.0, 80.0, 60.0],
+    [0.0, 15.0, 0.0, 0.0, 0.0, 80.0, 0.0, 0.0, 120.0, 0.0],
+    [0.0, 30.0, 0.0, 30.0, 30.0, 0.0, 0.0, 50.0, 0.0, 100.0],
+];
+
+fn tileTypeToInt(tile: &TileType) -> usize {
+    match tile {
+        TileType::Ocean => 0,
+        TileType::River => 1,
+        TileType::Beach => 2,
+        TileType::Grassland => 3,
+        TileType::Forest => 4,
+        TileType::Mountain => 5,
+        TileType::Desert => 6,
+        TileType::Tundra => 7,
+        TileType::Snow => 8,
+        TileType::Swamp => 9,
+    }
+}
+
+fn add_prob_arrays(original: &mut [f32; 10], add: &[f32; 10]) {
+    for i in 0..10 {
+        original[i] += add[i];
+    }
+}
+
 fn random_tile_type(
     ul: Option<TileType>,
     up: Option<TileType>,
@@ -134,9 +178,6 @@ fn random_tile_type(
     d: Option<TileType>,
     dr: Option<TileType>,
 ) -> TileType {
-    let mut rng = thread_rng();
-    let tile_type = rng.gen_range(0..74);
-
     let ulType = ul.unwrap_or(TileType::Grassland);
     let upType = up.unwrap_or(TileType::Grassland);
     let urType = ur.unwrap_or(TileType::Grassland);
@@ -146,7 +187,31 @@ fn random_tile_type(
     let dType = d.unwrap_or(TileType::Grassland);
     let drType = dr.unwrap_or(TileType::Grassland);
 
-    match tile_type {
+    let mut weights = [0.0; 10];
+    add_prob_arrays(&mut weights, &adj_matrix[tileTypeToInt(&ulType)]);
+    add_prob_arrays(&mut weights, &adj_matrix[tileTypeToInt(&upType)]);
+    add_prob_arrays(&mut weights, &adj_matrix[tileTypeToInt(&urType)]);
+    add_prob_arrays(&mut weights, &adj_matrix[tileTypeToInt(&lType)]);
+    add_prob_arrays(&mut weights, &adj_matrix[tileTypeToInt(&rType)]);
+    add_prob_arrays(&mut weights, &adj_matrix[tileTypeToInt(&dlType)]);
+    add_prob_arrays(&mut weights, &adj_matrix[tileTypeToInt(&dType)]);
+    add_prob_arrays(&mut weights, &adj_matrix[tileTypeToInt(&drType)]);
+
+    let sum_of_weigths = weights.iter().sum::<f32>();
+    let mut rng = thread_rng();
+    let rng_val = rng.gen_range(0.0..sum_of_weigths);
+    let mut curr_sum = 0.0;
+    let mut type_int = 0;
+
+    for i in 0..10 {
+        curr_sum += weights[i];
+        if rng_val < curr_sum {
+            type_int = i;
+            break;
+        }
+    }
+
+    return match type_int {
         0 => TileType::Ocean,
         1 => TileType::River,
         2 => TileType::Beach,
@@ -157,16 +222,8 @@ fn random_tile_type(
         7 => TileType::Tundra,
         8 => TileType::Snow,
         9 => TileType::Swamp,
-        10..=17 => ulType,
-        18..=25 => upType,
-        26..=33 => urType,
-        34..=41 => lType,
-        42..=49 => rType,
-        50..=57 => dlType,
-        58..=65 => dType,
-        66..=73 => drType,
         _ => TileType::Grassland,
-    }
+    };
 }
 
 fn tilePixel(tileType: &TileType) -> [u8; 3] {
